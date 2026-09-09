@@ -530,3 +530,35 @@ textarea.input { height: auto; min-height: 80px; padding: 10px 12px; resize: ver
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* Goal Planner */
+
+.goal-asset-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.goal-asset-row:last-child {
+  border-bottom: 0;
+}
+
+.goal-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.goal-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.goal-result-row:last-child {
+  border-bottom: 0;
+}
