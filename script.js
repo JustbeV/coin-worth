@@ -1773,6 +1773,9 @@ document.addEventListener('click', async (e) => {
     case 'open-scenario-picker': openScenarioPicker(); break;
     case 'select-scenario': selectScenario(id); break;
     case 'open-scenario-form': openScenarioForm(); break;
+    case 'open-goal-planner': openGoalPlanner(); break;
+    case 'calculate-goal-planner': calculateGoalPlanner(); break;
+     
     case 'save-scenario': saveScenarioFromForm(id || null); break;
     case 'open-scenario-menu': openScenarioMenu(id); break;
     case 'menu-edit-scenario': closeModal(); openScenarioForm(id); break;
