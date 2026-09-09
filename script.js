@@ -1024,9 +1024,283 @@ function renderScenariosView() {
       <button class="btn btn-primary" data-action="open-scenario-form"><span class="nav-icon" data-icon="add"></span>New</button>
     </div>
     <div class="panel" style="padding:4px 12px;">${rows}</div>
-    <button class="btn btn-full" data-action="open-compare-modal" ${state.scenarios.length < 2 ? 'disabled' : ''}>Compare Scenarios</button>
+    <button class="btn btn-full" data-action="open-goal-planner">🎯 Goal Planner</button>
+<button class="btn btn-full" data-action="open-compare-modal" ${state.scenarios.length < 2 ? 'disabled' : ''}>Compare Scenarios</button>
   `;
 }
+
+/* ==========================================================================
+   GOAL PLANNER
+   Simulates selling a percentage of multiple assets to fund a goal.
+   Does NOT modify actual holdings.
+   ========================================================================== */
+
+function openGoalPlanner() {
+  if (state.assets.length === 0) {
+    toast('Add at least one asset first.');
+    return;
+  }
+
+  const scenario = selectedScenario();
+
+  if (!scenario) {
+    toast('Select a price scenario first.');
+    return;
+  }
+
+  const priceRows = state.assets.map(a => {
+    const price = scenarioPriceFor(scenario, a.id);
+
+    return `
+      <div class="goal-asset-row">
+        <div style="margin-bottom:8px;">
+          <strong>${escapeHTML(a.name)}</strong>
+          <span class="mono" style="color:var(--ink-soft);">
+            ${escapeHTML(a.symbol)}
+          </span>
+        </div>
+
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">
+          Holding: <span class="mono">${formatAmount(a.amount)}</span>
+          · Price: <span class="mono">${price == null ? '—' : displayPrice(price)}</span>
+        </div>
+
+        <div class="field" style="margin-bottom:4px;">
+          <label for="gp-pct-${a.id}">
+            Maximum sell %
+          </label>
+
+          <div class="suffix-input">
+            <input
+              class="input"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value="0"
+              id="gp-pct-${a.id}"
+              data-asset="${a.id}"
+              placeholder="0"
+            >
+            <span class="suffix">%</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  openModal({
+    title: 'Goal Planner',
+    wide: true,
+
+    bodyHTML: `
+      <div class="field">
+        <label for="gp-name">Goal</label>
+        <input
+          class="input"
+          id="gp-name"
+          type="text"
+          placeholder="Buy a bike"
+          maxlength="50"
+        >
+      </div>
+
+      <div class="field">
+        <label for="gp-target">Target amount</label>
+
+        <div class="prefix-input">
+          <span class="prefix">$</span>
+          <input
+            class="input"
+            id="gp-target"
+            type="number"
+            min="0"
+            step="any"
+            placeholder="1000"
+          >
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <p class="hint" style="margin-bottom:12px;">
+        Enter the maximum percentage you are willing to sell from each asset.
+        The calculator will simulate the sale using the prices from
+        <strong>${escapeHTML(scenario.name)}</strong>.
+      </p>
+
+      <div id="goal-planner-assets">
+        ${priceRows}
+      </div>
+
+      <div id="goal-planner-result" style="margin-top:16px;">
+        ${renderGoalPlannerResult()}
+      </div>
+    `,
+
+    footerHTML: `
+      <button class="btn" data-action="close-modal">Close</button>
+      <button class="btn btn-primary" data-action="calculate-goal-planner">
+        Calculate
+      </button>
+    `,
+
+    onMount: (root) => {
+      root.querySelector('#gp-target').addEventListener('input', updateGoalPlannerLive);
+      root.querySelectorAll('[id^="gp-pct-"]').forEach(input => {
+        input.addEventListener('input', updateGoalPlannerLive);
+      });
+    }
+  });
+}
+
+
+function updateGoalPlannerLive() {
+  const result = document.getElementById('goal-planner-result');
+  if (!result) return;
+
+  result.innerHTML = renderGoalPlannerResult();
+}
+
+
+function renderGoalPlannerResult() {
+  const targetInput = document.getElementById('gp-target');
+
+  if (!targetInput) {
+    return '';
+  }
+
+  const target = Number(targetInput.value) || 0;
+  const scenario = selectedScenario();
+
+  if (!scenario) return '';
+
+  let totalProceeds = 0;
+
+  const rows = state.assets.map(a => {
+    const pctInput = document.getElementById(`gp-pct-${a.id}`);
+
+    if (!pctInput) return '';
+
+    let pct = Number(pctInput.value) || 0;
+
+    pct = Math.max(0, Math.min(100, pct));
+
+    const price = scenarioPriceFor(scenario, a.id);
+
+    if (price == null || price <= 0 || a.amount <= 0 || pct <= 0) {
+      return '';
+    }
+
+    const quantitySold = a.amount * (pct / 100);
+    const proceeds = quantitySold * price;
+    const remaining = a.amount - quantitySold;
+
+    totalProceeds += proceeds;
+
+    return `
+      <div class="goal-result-row">
+        <div>
+          <strong>${escapeHTML(a.symbol)}</strong>
+          <div style="font-size:12px;color:var(--ink-soft);">
+            Sell ${formatAmount(quantitySold)}
+            · Keep ${formatAmount(remaining)}
+          </div>
+        </div>
+
+        <strong class="mono">${displayMoney(proceeds)}</strong>
+      </div>
+    `;
+  }).join('');
+
+  const difference = totalProceeds - target;
+  const reached = target > 0 && totalProceeds >= target;
+
+  return `
+    <div class="panel" style="padding:14px;">
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">
+        Available from selected sales
+      </div>
+
+      <div class="mono" style="font-size:24px;font-weight:700;margin-bottom:12px;">
+        ${displayMoney(totalProceeds)}
+      </div>
+
+      <div class="goal-summary-row">
+        <span>Goal</span>
+        <strong class="mono">${displayMoney(target)}</strong>
+      </div>
+
+      <div class="goal-summary-row">
+        <span>${reached ? 'Surplus' : 'Shortfall'}</span>
+        <strong class="mono">
+          ${displayMoney(Math.abs(difference))}
+        </strong>
+      </div>
+
+      <div style="margin-top:14px;font-weight:700;">
+        ${target <= 0
+          ? 'Enter a target amount.'
+          : reached
+            ? '✓ Goal can be funded'
+            : '✕ Goal not reached'}
+      </div>
+
+      ${rows
+        ? `<hr class="divider"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">Sale breakdown</div>${rows}`
+        : ''}
+    </div>
+  `;
+}
+
+
+function calculateGoalPlanner() {
+  const result = document.getElementById('goal-planner-result');
+
+  if (!result) return;
+
+  result.innerHTML = renderGoalPlannerResult();
+
+  const target = Number(document.getElementById('gp-target').value) || 0;
+
+  if (target <= 0) {
+    toast('Enter a target amount.');
+    return;
+  }
+
+  const scenario = selectedScenario();
+
+  if (!scenario) {
+    toast('No active scenario.');
+    return;
+  }
+
+  let total = 0;
+
+  state.assets.forEach(a => {
+    const input = document.getElementById(`gp-pct-${a.id}`);
+
+    if (!input) return;
+
+    const pct = Math.max(
+      0,
+      Math.min(100, Number(input.value) || 0)
+    );
+
+    const price = scenarioPriceFor(scenario, a.id);
+
+    if (price == null || price <= 0) return;
+
+    total += a.amount * (pct / 100) * price;
+  });
+
+  if (total >= target) {
+    toast('Goal can be funded.');
+  } else {
+    toast('Goal is not reached yet.');
+  }
+}
+
 
 function selectScenario(id) {
   state.selectedScenarioId = id;
