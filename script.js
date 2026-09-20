@@ -206,6 +206,7 @@ function defaultState() {
     version: 1,
     assets: [],
     scenarios: [],
+    goals: [],
     selectedScenarioId: null,
     settings: {
       theme: 'system',
@@ -220,9 +221,10 @@ function migrateState(raw) {
   const base = defaultState();
   if (!raw || typeof raw !== 'object') return base;
   const s = Object.assign({}, base, raw);
-  s.assets = Array.isArray(raw.assets) ? raw.assets : [];
-  s.scenarios = Array.isArray(raw.scenarios) ? raw.scenarios : [];
-  s.settings = Object.assign({}, base.settings, raw.settings || {});
+s.assets = Array.isArray(raw.assets) ? raw.assets : [];
+s.scenarios = Array.isArray(raw.scenarios) ? raw.scenarios : [];
+s.goals = Array.isArray(raw.goals) ? raw.goals : [];
+s.settings = Object.assign({}, base.settings, raw.settings || {});
   s.settings.rates = Object.assign({}, base.settings.rates, (raw.settings && raw.settings.rates) || {});
   s.assets.forEach(a => {
     if (!a.id) a.id = uid();
@@ -233,6 +235,21 @@ function migrateState(raw) {
     if (typeof a.note !== 'string') a.note = '';
     if (a.referencePrice == null) a.referencePrice = null;
   });
+
+   s.goals.forEach(goal => {
+  if (!goal.id) goal.id = uid();
+  if (typeof goal.name !== 'string') goal.name = 'Untitled Goal';
+  if (typeof goal.target !== 'number') goal.target = Number(goal.target) || 0;
+  if (!goal.scenarioId || !s.scenarios.some(sc => sc.id === goal.scenarioId)) {
+    goal.scenarioId = s.selectedScenarioId || null;
+  }
+  goal.assetPercents =
+    goal.assetPercents && typeof goal.assetPercents === 'object'
+      ? goal.assetPercents
+      : {};
+  if (typeof goal.note !== 'string') goal.note = '';
+});
+   
   s.scenarios.forEach(sc => {
     if (!sc.id) sc.id = uid();
     sc.prices = sc.prices && typeof sc.prices === 'object' ? sc.prices : {};
@@ -1024,49 +1041,204 @@ function renderScenariosView() {
       <button class="btn btn-primary" data-action="open-scenario-form"><span class="nav-icon" data-icon="add"></span>New</button>
     </div>
     <div class="panel" style="padding:4px 12px;">${rows}</div>
-    <button class="btn btn-full" data-action="open-goal-planner">🎯 Goal Planner</button>
-<button class="btn btn-full" data-action="open-compare-modal" ${state.scenarios.length < 2 ? 'disabled' : ''}>Compare Scenarios</button>
+    <div class="view-section-header">
+  <div>
+    <h3 class="panel-title">Goals</h3>
+    <p class="view-sub">Saved plans for funding your targets.</p>
+  </div>
+
+  <button
+    class="btn btn-primary"
+    data-action="open-goal-planner"
+  >
+    <span class="nav-icon" data-icon="add"></span>
+    New Goal
+  </button>
+</div>
+
+${renderGoalsPanel()}
+
+<button
+  class="btn btn-full"
+  data-action="open-compare-modal"
+  ${state.scenarios.length < 2 ? 'disabled' : ''}
+>
+  Compare Scenarios
+</button>
   `;
 }
 
 /* ==========================================================================
-   GOAL PLANNER
-   Simulates selling a percentage of multiple assets to fund a goal.
-   Does NOT modify actual holdings.
+   12. GOAL PLANNER
+   Saved multiple-goal planner.
    ========================================================================== */
 
-function openGoalPlanner() {
+function getGoal(id) {
+  return state.goals.find(g => g.id === id);
+}
+
+function goalProjectedProceeds(goal) {
+  const scenario = getScenario(goal.scenarioId);
+  if (!scenario) return 0;
+
+  return state.assets.reduce((total, asset) => {
+    const pct = Math.max(
+      0,
+      Math.min(100, Number(goal.assetPercents?.[asset.id]) || 0)
+    );
+
+    const price = scenarioPriceFor(scenario, asset.id);
+
+    if (price == null || price <= 0 || asset.amount <= 0 || pct <= 0) {
+      return total;
+    }
+
+    return total + asset.amount * (pct / 100) * price;
+  }, 0);
+}
+
+function goalProgress(goal) {
+  if (!goal.target || goal.target <= 0) return 0;
+
+  return clamp(
+    (goalProjectedProceeds(goal) / goal.target) * 100,
+    0,
+    100
+  );
+}
+
+function renderGoalsPanel() {
+  if (!state.goals.length) {
+    return `
+      <div class="panel goal-empty">
+        <div class="goal-empty-icon">🎯</div>
+        <h3>No saved goals yet</h3>
+        <p>Create a goal to see how much of your portfolio could be used to fund it.</p>
+        <button class="btn btn-primary" data-action="open-goal-planner">
+          <span class="nav-icon" data-icon="add"></span>
+          Create Goal
+        </button>
+      </div>
+    `;
+  }
+
+  const cards = state.goals.map(goal => {
+    const scenario = getScenario(goal.scenarioId);
+    const proceeds = goalProjectedProceeds(goal);
+    const progress = goalProgress(goal);
+    const remaining = Math.max(0, goal.target - proceeds);
+    const reached = goal.target > 0 && proceeds >= goal.target;
+
+    return `
+      <div class="goal-card">
+        <div class="goal-card-header">
+          <div>
+            <div class="goal-card-title">
+              ${escapeHTML(goal.name)}
+            </div>
+            <div class="goal-card-meta">
+              ${scenario ? escapeHTML(scenario.name) : 'No scenario'}
+            </div>
+          </div>
+
+          <button
+            class="icon-btn"
+            data-action="open-goal-menu"
+            data-id="${goal.id}"
+            aria-label="Goal actions"
+          >
+            <span class="nav-icon" data-icon="more"></span>
+          </button>
+        </div>
+
+        <div class="goal-card-values">
+          <div>
+            <div class="goal-card-label">Projected</div>
+            <strong class="mono">${displayMoney(proceeds)}</strong>
+          </div>
+
+          <div class="goal-card-target">
+            <div class="goal-card-label">Target</div>
+            <strong class="mono">${displayMoney(goal.target)}</strong>
+          </div>
+        </div>
+
+        <div class="goal-progress-track">
+          <div
+            class="goal-progress-fill"
+            style="width:${progress}%"
+          ></div>
+        </div>
+
+        <div class="goal-card-bottom">
+          <span class="mono">${progress.toFixed(0)}%</span>
+          <span>
+            ${reached
+              ? '<strong class="text-accent">Goal reached</strong>'
+              : `<span class="text-warn">${displayMoney(remaining)} remaining</span>`
+            }
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="goals-grid">
+      ${cards}
+    </div>
+  `;
+}
+
+function openGoalPlanner(goalId = null) {
   if (state.assets.length === 0) {
     toast('Add at least one asset first.');
     return;
   }
 
-  const scenario = selectedScenario();
+  if (state.scenarios.length === 0) {
+    toast('Create a price scenario first.');
+    return;
+  }
 
-  if (!scenario) {
+  const existing = goalId ? getGoal(goalId) : null;
+  const scenarioId = existing?.scenarioId || state.selectedScenarioId;
+
+  if (!scenarioId || !getScenario(scenarioId)) {
     toast('Select a price scenario first.');
     return;
   }
 
-  const priceRows = state.assets.map(a => {
-    const price = scenarioPriceFor(scenario, a.id);
+  const scenario = getScenario(scenarioId);
+
+  const draftPercents = existing
+    ? Object.assign({}, existing.assetPercents)
+    : {};
+
+  const priceRows = state.assets.map(asset => {
+    const price = scenarioPriceFor(scenario, asset.id);
+    const pct = draftPercents[asset.id] ?? 0;
 
     return `
       <div class="goal-asset-row">
         <div style="margin-bottom:8px;">
-          <strong>${escapeHTML(a.name)}</strong>
+          <strong>${escapeHTML(asset.name)}</strong>
           <span class="mono" style="color:var(--ink-soft);">
-            ${escapeHTML(a.symbol)}
+            ${escapeHTML(asset.symbol)}
           </span>
         </div>
 
         <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">
-          Holding: <span class="mono">${formatAmount(a.amount)}</span>
-          · Price: <span class="mono">${price == null ? '—' : displayPrice(price)}</span>
+          Holding:
+          <span class="mono">${formatAmount(asset.amount)}</span>
+          · Price:
+          <span class="mono">
+            ${price == null ? '—' : displayPrice(price)}
+          </span>
         </div>
 
         <div class="field" style="margin-bottom:4px;">
-          <label for="gp-pct-${a.id}">
+          <label for="gp-pct-${asset.id}">
             Maximum sell %
           </label>
 
@@ -1077,10 +1249,9 @@ function openGoalPlanner() {
               min="0"
               max="100"
               step="1"
-              value="0"
-              id="gp-pct-${a.id}"
-              data-asset="${a.id}"
-              placeholder="0"
+              value="${pct}"
+              id="gp-pct-${asset.id}"
+              data-asset="${asset.id}"
             >
             <span class="suffix">%</span>
           </div>
@@ -1090,26 +1261,37 @@ function openGoalPlanner() {
   }).join('');
 
   openModal({
-    title: 'Goal Planner',
+    title: existing ? 'Edit Goal' : 'New Goal',
     wide: true,
 
     bodyHTML: `
       <div class="field">
-        <label for="gp-name">Goal</label>
+        <label for="gp-name">Goal Name</label>
+
         <input
           class="input"
           id="gp-name"
           type="text"
           placeholder="Buy a bike"
           maxlength="50"
+          value="${existing ? escapeHTML(existing.name) : ''}"
         >
+
+        <span class="error-text hidden" id="gp-name-err">
+          Please enter a goal name.
+        </span>
       </div>
 
       <div class="field">
-        <label for="gp-target">Target amount</label>
+        <label for="gp-target">
+          Target Amount
+        </label>
 
         <div class="prefix-input">
-          <span class="prefix">$</span>
+          <span class="prefix">
+            ${currencySymbol(state.settings.displayCurrency)}
+          </span>
+
           <input
             class="input"
             id="gp-target"
@@ -1117,16 +1299,48 @@ function openGoalPlanner() {
             min="0"
             step="any"
             placeholder="1000"
+            value="${existing ? existing.target : ''}"
           >
         </div>
+      </div>
+
+      <div class="field">
+        <label for="gp-scenario">
+          Price Scenario
+        </label>
+
+        <select class="input select-native" id="gp-scenario">
+          ${state.scenarios.map(sc => `
+            <option
+              value="${sc.id}"
+              ${sc.id === scenarioId ? 'selected' : ''}
+            >
+              ${escapeHTML(sc.name)}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="gp-note">
+          Note
+          <span style="font-weight:400;color:var(--ink-soft);">
+            (optional)
+          </span>
+        </label>
+
+        <textarea
+          class="input"
+          id="gp-note"
+          placeholder="What are you saving for?"
+        >${existing ? escapeHTML(existing.note) : ''}</textarea>
       </div>
 
       <hr class="divider">
 
       <p class="hint" style="margin-bottom:12px;">
         Enter the maximum percentage you are willing to sell from each asset.
-        The calculator will simulate the sale using the prices from
-        <strong>${escapeHTML(scenario.name)}</strong>.
+        The calculation uses the prices from the selected scenario.
       </p>
 
       <div id="goal-planner-assets">
@@ -1134,81 +1348,112 @@ function openGoalPlanner() {
       </div>
 
       <div id="goal-planner-result" style="margin-top:16px;">
-        ${renderGoalPlannerResult()}
+        ${renderGoalPlannerResultFromDraft(
+          existing
+            ? {
+                target: existing.target,
+                scenarioId: existing.scenarioId,
+                assetPercents: existing.assetPercents
+              }
+            : {
+                target: 0,
+                scenarioId,
+                assetPercents: draftPercents
+              }
+        )}
       </div>
     `,
 
     footerHTML: `
-      <button class="btn" data-action="close-modal">Close</button>
-      <button class="btn btn-primary" data-action="calculate-goal-planner">
-        Calculate
+      <button class="btn" data-action="close-modal">
+        Cancel
+      </button>
+
+      <button
+        class="btn btn-primary"
+        data-action="save-goal"
+        data-id="${existing ? existing.id : ''}"
+      >
+        ${existing ? 'Save Changes' : 'Save Goal'}
       </button>
     `,
 
-    onMount: (root) => {
-      root.querySelector('#gp-target').addEventListener('input', updateGoalPlannerLive);
+    onMount: root => {
+      const update = () => {
+        const target = Number(root.querySelector('#gp-target').value) || 0;
+        const selectedScenarioId = root.querySelector('#gp-scenario').value;
+
+        const assetPercents = {};
+
+        root.querySelectorAll('[id^="gp-pct-"]').forEach(input => {
+          assetPercents[input.dataset.asset] = Number(input.value) || 0;
+        });
+
+        root.querySelector('#goal-planner-result').innerHTML =
+          renderGoalPlannerResultFromDraft({
+            target,
+            scenarioId: selectedScenarioId,
+            assetPercents
+          });
+      };
+
+      root.querySelector('#gp-target').addEventListener('input', update);
+
+      root.querySelector('#gp-scenario').addEventListener('change', update);
+
       root.querySelectorAll('[id^="gp-pct-"]').forEach(input => {
-        input.addEventListener('input', updateGoalPlannerLive);
+        input.addEventListener('input', update);
       });
     }
   });
 }
 
-
-function updateGoalPlannerLive() {
-  const result = document.getElementById('goal-planner-result');
-  if (!result) return;
-
-  result.innerHTML = renderGoalPlannerResult();
-}
-
-
-function renderGoalPlannerResult() {
-  const targetInput = document.getElementById('gp-target');
-
-  if (!targetInput) {
-    return '';
-  }
-
-  const target = Number(targetInput.value) || 0;
-  const scenario = selectedScenario();
+function renderGoalPlannerResultFromDraft(draft) {
+  const target = Number(draft.target) || 0;
+  const scenario = getScenario(draft.scenarioId);
 
   if (!scenario) return '';
 
+  const assetPercents = draft.assetPercents || {};
   let totalProceeds = 0;
 
-  const rows = state.assets.map(a => {
-    const pctInput = document.getElementById(`gp-pct-${a.id}`);
+  const rows = state.assets.map(asset => {
+    const pct = Math.max(
+      0,
+      Math.min(100, Number(assetPercents[asset.id]) || 0)
+    );
 
-    if (!pctInput) return '';
+    const price = scenarioPriceFor(scenario, asset.id);
 
-    let pct = Number(pctInput.value) || 0;
-
-    pct = Math.max(0, Math.min(100, pct));
-
-    const price = scenarioPriceFor(scenario, a.id);
-
-    if (price == null || price <= 0 || a.amount <= 0 || pct <= 0) {
+    if (
+      price == null ||
+      price <= 0 ||
+      asset.amount <= 0 ||
+      pct <= 0
+    ) {
       return '';
     }
 
-    const quantitySold = a.amount * (pct / 100);
+    const quantitySold = asset.amount * (pct / 100);
     const proceeds = quantitySold * price;
-    const remaining = a.amount - quantitySold;
+    const remaining = asset.amount - quantitySold;
 
     totalProceeds += proceeds;
 
     return `
       <div class="goal-result-row">
         <div>
-          <strong>${escapeHTML(a.symbol)}</strong>
+          <strong>${escapeHTML(asset.symbol)}</strong>
+
           <div style="font-size:12px;color:var(--ink-soft);">
             Sell ${formatAmount(quantitySold)}
             · Keep ${formatAmount(remaining)}
           </div>
         </div>
 
-        <strong class="mono">${displayMoney(proceeds)}</strong>
+        <strong class="mono">
+          ${displayMoney(proceeds)}
+        </strong>
       </div>
     `;
   }).join('');
@@ -1222,85 +1467,201 @@ function renderGoalPlannerResult() {
         Available from selected sales
       </div>
 
-      <div class="mono" style="font-size:24px;font-weight:700;margin-bottom:12px;">
+      <div
+        class="mono"
+        style="font-size:24px;font-weight:700;margin-bottom:12px;"
+      >
         ${displayMoney(totalProceeds)}
       </div>
 
       <div class="goal-summary-row">
         <span>Goal</span>
-        <strong class="mono">${displayMoney(target)}</strong>
+        <strong class="mono">
+          ${displayMoney(target)}
+        </strong>
       </div>
 
       <div class="goal-summary-row">
         <span>${reached ? 'Surplus' : 'Shortfall'}</span>
+
         <strong class="mono">
           ${displayMoney(Math.abs(difference))}
         </strong>
       </div>
 
       <div style="margin-top:14px;font-weight:700;">
-        ${target <= 0
-          ? 'Enter a target amount.'
-          : reached
-            ? '✓ Goal can be funded'
-            : '✕ Goal not reached'}
+        ${
+          target <= 0
+            ? 'Enter a target amount.'
+            : reached
+              ? '✓ Goal can be funded'
+              : '✕ Goal not reached'
+        }
       </div>
 
-      ${rows
-        ? `<hr class="divider"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">Sale breakdown</div>${rows}`
-        : ''}
+      ${
+        rows
+          ? `
+            <hr class="divider">
+
+            <div
+              style="font-size:13px;font-weight:700;margin-bottom:8px;"
+            >
+              Sale breakdown
+            </div>
+
+            ${rows}
+          `
+          : ''
+      }
     </div>
   `;
 }
 
+function saveGoalFromForm(existingId) {
+  const root = document.getElementById('modal-root');
 
-function calculateGoalPlanner() {
-  const result = document.getElementById('goal-planner-result');
+  const name = root.querySelector('#gp-name').value.trim();
+  const target = Number(root.querySelector('#gp-target').value);
+  const scenarioId = root.querySelector('#gp-scenario').value;
+  const note = root.querySelector('#gp-note').value.trim();
 
-  if (!result) return;
+  toggleFieldError('gp-name-err', !name);
 
-  result.innerHTML = renderGoalPlannerResult();
+  if (!name) return;
 
-  const target = Number(document.getElementById('gp-target').value) || 0;
-
-  if (target <= 0) {
-    toast('Enter a target amount.');
+  if (!isFinite(target) || target <= 0) {
+    toast('Enter a valid target amount.');
     return;
   }
 
-  const scenario = selectedScenario();
-
-  if (!scenario) {
-    toast('No active scenario.');
+  if (!getScenario(scenarioId)) {
+    toast('Select a valid scenario.');
     return;
   }
 
-  let total = 0;
+  const assetPercents = {};
 
-  state.assets.forEach(a => {
-    const input = document.getElementById(`gp-pct-${a.id}`);
-
-    if (!input) return;
-
+  root.querySelectorAll('[id^="gp-pct-"]').forEach(input => {
     const pct = Math.max(
       0,
       Math.min(100, Number(input.value) || 0)
     );
 
-    const price = scenarioPriceFor(scenario, a.id);
-
-    if (price == null || price <= 0) return;
-
-    total += a.amount * (pct / 100) * price;
+    assetPercents[input.dataset.asset] = pct;
   });
 
-  if (total >= target) {
-    toast('Goal can be funded.');
+  let goal = existingId ? getGoal(existingId) : null;
+
+  if (goal) {
+    goal.name = name;
+    goal.target = target;
+    goal.scenarioId = scenarioId;
+    goal.assetPercents = assetPercents;
+    goal.note = note;
   } else {
-    toast('Goal is not reached yet.');
+    goal = {
+      id: uid(),
+      name,
+      target,
+      scenarioId,
+      assetPercents,
+      note
+    };
+
+    state.goals.push(goal);
   }
+
+  saveState();
+  closeModal();
+  render();
+
+  toast(existingId ? 'Goal updated.' : 'Goal saved.');
 }
 
+function openGoalMenu(id) {
+  const goal = getGoal(id);
+  if (!goal) return;
+
+  openModal({
+    title: goal.name,
+    small: true,
+
+    bodyHTML: `
+      <div class="action-sheet-list">
+        <button
+          data-action="menu-edit-goal"
+          data-id="${id}"
+        >
+          Edit Goal
+        </button>
+
+        <button
+          data-action="menu-duplicate-goal"
+          data-id="${id}"
+        >
+          Duplicate
+        </button>
+
+        <button
+          class="danger"
+          data-action="menu-delete-goal"
+          data-id="${id}"
+        >
+          Delete
+        </button>
+      </div>
+    `
+  });
+}
+
+function duplicateGoal(id) {
+  const goal = getGoal(id);
+  if (!goal) return;
+
+  const clone = {
+    id: uid(),
+    name: goal.name + ' Copy',
+    target: goal.target,
+    scenarioId: goal.scenarioId,
+    assetPercents: Object.assign({}, goal.assetPercents),
+    note: goal.note
+  };
+
+  state.goals.push(clone);
+
+  saveState();
+  render();
+
+  toast(`Duplicated as "${clone.name}".`);
+}
+
+function deleteGoal(id) {
+  const goal = getGoal(id);
+  if (!goal) return;
+
+  confirmDialog({
+    title: 'Delete this goal?',
+    message: `"${goal.name}" will be permanently removed.`,
+    confirmLabel: 'Delete',
+    danger: true,
+
+    onConfirm: () => {
+      state.goals = state.goals.filter(g => g.id !== id);
+
+      saveState();
+      render();
+
+      toast('Goal deleted.');
+    }
+  });
+}
+
+
+    
+    
+    
+//STOPPP
 
 function selectScenario(id) {
   state.selectedScenarioId = id;
@@ -1774,7 +2135,11 @@ document.addEventListener('click', async (e) => {
     case 'select-scenario': selectScenario(id); break;
     case 'open-scenario-form': openScenarioForm(); break;
     case 'open-goal-planner': openGoalPlanner(); break;
-    case 'calculate-goal-planner': calculateGoalPlanner(); break;
+case 'save-goal': saveGoalFromForm(id || null); break;
+case 'open-goal-menu': openGoalMenu(id); break;
+case 'menu-edit-goal': closeModal(); openGoalPlanner(id); break;
+case 'menu-duplicate-goal': closeModal(); duplicateGoal(id); break;
+case 'menu-delete-goal': closeModal(); deleteGoal(id); break;
      
     case 'save-scenario': saveScenarioFromForm(id || null); break;
     case 'open-scenario-menu': openScenarioMenu(id); break;
