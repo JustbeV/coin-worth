@@ -2023,15 +2023,16 @@ async function exportData() {
     if (a.logoType === 'custom' && customLogoCache.has(a.id)) customLogos[a.id] = customLogoCache.get(a.id);
   }
   const payload = {
-    ledgerExport: true,
-    version: state.version,
-    exportedAt: new Date().toISOString(),
-    assets: state.assets,
-    scenarios: state.scenarios,
-    selectedScenarioId: state.selectedScenarioId,
-    settings: state.settings,
-    customLogos
-  };
+  ledgerExport: true,
+  version: state.version,
+  exportedAt: new Date().toISOString(),
+  assets: state.assets,
+  scenarios: state.scenarios,
+  goals: state.goals,
+  selectedScenarioId: state.selectedScenarioId,
+  settings: state.settings,
+  customLogos
+};
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2069,12 +2070,13 @@ function handleImportFile(e) {
 
 async function applyImportedData(data) {
   const migrated = migrateState({
-    version: data.version || 1,
-    assets: data.assets,
-    scenarios: data.scenarios,
-    selectedScenarioId: data.selectedScenarioId || null,
-    settings: data.settings || {}
-  });
+  version: data.version || 1,
+  assets: data.assets,
+  scenarios: data.scenarios,
+  goals: Array.isArray(data.goals) ? data.goals : [],
+  selectedScenarioId: data.selectedScenarioId || null,
+  settings: data.settings || {}
+});
   state = migrated;
   customLogoCache.clear();
   if (data.customLogos && typeof data.customLogos === 'object') {
@@ -2092,7 +2094,7 @@ async function applyImportedData(data) {
 function resetAllData() {
   confirmDialog({
     title: 'Reset all data?',
-    message: 'This permanently deletes every asset, scenario, sell plan, note, and custom logo stored in this browser. This cannot be undone.',
+    message: 'This permanently deletes every asset, scenario, goal, sell plan, note, and custom logo stored in this browser. This cannot be undone.',
     confirmLabel: 'Reset Everything',
     danger: true,
     onConfirm: async () => {
