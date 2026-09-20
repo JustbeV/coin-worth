@@ -392,7 +392,13 @@ function closeModal() {
    ========================================================================== */
 
 let currentView = 'portfolio';
-const VIEW_TITLES = { portfolio: 'Portfolio', scenarios: 'Scenarios', calculator: 'Calculator', settings: 'Settings' };
+const VIEW_TITLES = {
+  portfolio: 'Portfolio',
+  scenarios: 'Scenarios',
+  goals: 'Goals',
+  calculator: 'Calculator',
+  settings: 'Settings'
+};
 
 function setView(view) {
   currentView = view;
@@ -410,9 +416,10 @@ function setView(view) {
 function render() {
   const main = document.getElementById('main');
   if (currentView === 'portfolio') main.innerHTML = renderPortfolioView();
-  else if (currentView === 'scenarios') main.innerHTML = renderScenariosView();
-  else if (currentView === 'calculator') main.innerHTML = renderCalculatorView();
-  else if (currentView === 'settings') main.innerHTML = renderSettingsView();
+else if (currentView === 'scenarios') main.innerHTML = renderScenariosView();
+else if (currentView === 'goals') main.innerHTML = renderGoalsView();
+else if (currentView === 'calculator') main.innerHTML = renderCalculatorView();
+else if (currentView === 'settings') main.innerHTML = renderSettingsView();
 }
 
 /* ==========================================================================
@@ -1041,22 +1048,6 @@ function renderScenariosView() {
       <button class="btn btn-primary" data-action="open-scenario-form"><span class="nav-icon" data-icon="add"></span>New</button>
     </div>
     <div class="panel" style="padding:4px 12px;">${rows}</div>
-    <div class="view-section-header">
-  <div>
-    <h3 class="panel-title">Goals</h3>
-    <p class="view-sub">Saved plans for funding your targets.</p>
-  </div>
-
-  <button
-    class="btn btn-primary"
-    data-action="open-goal-planner"
-  >
-    <span class="nav-icon" data-icon="add"></span>
-    New Goal
-  </button>
-</div>
-
-${renderGoalsPanel()}
 
 <button
   class="btn btn-full"
@@ -1065,6 +1056,29 @@ ${renderGoalsPanel()}
 >
   Compare Scenarios
 </button>
+  `;
+}
+
+function renderGoalsView() {
+  return `
+    <div class="view-header">
+      <div>
+        <h1 class="view-title">Goals</h1>
+        <p class="view-sub">
+          Save and track multiple portfolio funding plans.
+        </p>
+      </div>
+
+      <button
+        class="btn btn-primary"
+        data-action="open-goal-planner"
+      >
+        <span class="nav-icon" data-icon="add"></span>
+        New Goal
+      </button>
+    </div>
+
+    ${renderGoalsPanel()}
   `;
 }
 
