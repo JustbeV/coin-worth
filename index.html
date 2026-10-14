@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ledger &mdash; Crypto Scenario Calculator</title>
-<meta name="description" content="Manually enter your crypto holdings and see what they'd be worth under hypothetical prices. No live prices, no accounts, no server.">
+<title>Ledger — Crypto Portfolio & Scenario Calculator</title>
+<meta name="description" content="Track crypto holdings with current prices fetched on demand and compare hypothetical price scenarios.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -20,43 +20,14 @@
       <span class="brand-name">Ledger</span>
     </div>
     <ul class="sidebar-nav" id="sidebar-nav">
-  <li>
-    <button class="nav-btn" data-view="portfolio" aria-current="page">
-      <span class="nav-icon" data-icon="portfolio"></span>
-      Portfolio
-    </button>
-  </li>
-
-  <li>
-    <button class="nav-btn" data-view="scenarios">
-      <span class="nav-icon" data-icon="scenarios"></span>
-      Scenarios
-    </button>
-  </li>
-
-  <li>
-    <button class="nav-btn" data-view="goals">
-      <span class="nav-icon" data-icon="goals"></span>
-      Goals
-    </button>
-  </li>
-
-  <li>
-    <button class="nav-btn" data-view="calculator">
-      <span class="nav-icon" data-icon="calculator"></span>
-      Calculator
-    </button>
-  </li>
-
-  <li>
-    <button class="nav-btn" data-view="settings">
-      <span class="nav-icon" data-icon="settings"></span>
-      Settings
-    </button>
-  </li>
-</ul>
+      <li><button class="nav-btn" data-view="portfolio" aria-current="page"><span class="nav-icon" data-icon="portfolio"></span>Portfolio</button></li>
+      <li><button class="nav-btn" data-view="scenarios"><span class="nav-icon" data-icon="scenarios"></span>Scenarios</button></li>
+      <li><button class="nav-btn" data-view="goals"><span class="nav-icon" data-icon="goals"></span>Goals</button></li>
+      <li><button class="nav-btn" data-view="calculator"><span class="nav-icon" data-icon="calculator"></span>Calculator</button></li>
+      <li><button class="nav-btn" data-view="settings"><span class="nav-icon" data-icon="settings"></span>Settings</button></li>
+    </ul>
     <div class="sidebar-footer">
-      <p>Everything here is stored only in this browser.</p>
+      <p>Holdings are stored in this browser. Price lookups go to CoinGecko when requested.</p>
     </div>
   </nav>
 
@@ -75,37 +46,18 @@
 
   <!-- Mobile bottom nav -->
   <nav class="bottom-nav" aria-label="Main navigation">
-  <button class="bnav-btn" data-view="portfolio" aria-current="page">
-    <span class="nav-icon" data-icon="portfolio"></span>
-    <span>Portfolio</span>
-  </button>
-
-  <button class="bnav-btn" data-view="scenarios">
-    <span class="nav-icon" data-icon="scenarios"></span>
-    <span>Scenarios</span>
-  </button>
-
-  <button class="bnav-btn" data-view="goals">
-    <span class="nav-icon" data-icon="goals"></span>
-    <span>Goals</span>
-  </button>
-
-  <button class="bnav-btn" data-view="calculator">
-    <span class="nav-icon" data-icon="calculator"></span>
-    <span>Calculator</span>
-  </button>
-
-  <button class="bnav-btn" data-view="settings">
-    <span class="nav-icon" data-icon="settings"></span>
-    <span>Settings</span>
-  </button>
+    <button class="bnav-btn" data-view="portfolio" aria-current="page"><span class="nav-icon" data-icon="portfolio"></span><span>Portfolio</span></button>
+    <button class="bnav-btn" data-view="scenarios"><span class="nav-icon" data-icon="scenarios"></span><span>Scenarios</span></button>
+    <button class="bnav-btn" data-view="goals"><span class="nav-icon" data-icon="goals"></span><span>Goals</span></button>
+    <button class="bnav-btn" data-view="calculator"><span class="nav-icon" data-icon="calculator"></span><span>Calculator</span></button>
+    <button class="bnav-btn" data-view="settings"><span class="nav-icon" data-icon="settings"></span><span>Settings</span></button>
   </nav>
-  
-<!-- Modal root -->
-<div id="modal-root"></div>
 
-<!-- Toast container -->
-<div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <!-- Modal root -->
+  <div id="modal-root"></div>
+
+  <!-- Toast container -->
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
 <script src="script.js"></script>
 </body>
