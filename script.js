@@ -589,7 +589,7 @@ function renderPortfolioView() {
 
     <div class="totals-card live-totals-card">
       <div class="totals-eyebrow">Current Portfolio Value</div>
-      <div class="totals-value mono">${state.assets.some(a => livePriceForAsset(a) != null) ? displayMoney(convertFromUSD(totalLiveValueUSD())) : '—'}</div>
+      <div class="totals-value mono">${state.assets.some(a => livePriceForAsset(a) != null) ? displayMoney(totalLiveValueUSD()) : '—'}</div>
       <div class="totals-meta">
         <span class="meta-chip" id="live-price-status">${escapeHTML(livePriceStatusText())}</span>
       </div>
